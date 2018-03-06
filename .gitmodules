@@ -1,0 +1,3 @@
+[submodule "ext/libnoisesocket"]
+	path = ext/libnoisesocket
+	url = https://github.com/kutashenko/libnoisesocket.git
