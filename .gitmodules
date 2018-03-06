@@ -1,3 +1,6 @@
 [submodule "ext/libnoisesocket"]
 	path = ext/libnoisesocket
 	url = https://github.com/kutashenko/libnoisesocket.git
+[submodule "ext/virgil-sdk-cpp"]
+	path = ext/virgil-sdk-cpp
+	url = https://github.com/VirgilSecurity/virgil-sdk-cpp.git
