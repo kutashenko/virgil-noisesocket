@@ -10,5 +10,6 @@ CTestTestfile.cmake
 
 
 .idea/
+.depends_cache
 cmake-build-*/
 protobuf/nanopb/*
