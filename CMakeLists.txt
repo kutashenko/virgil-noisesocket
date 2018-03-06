@@ -39,13 +39,16 @@ cmake_minimum_required(VERSION 3.8)
 project(virgil-noisesocket VERSION 0.1)
 
 set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -g -O0")
 
 ########### Address sanitizer ###########
-set (CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_STATIC_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/ext/libnoisesocket")
@@ -53,40 +56,43 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/ext/virgil-sdk-cpp")
 
 ########### virgil-noisesocket ###########
 file(GLOB VIRGIL_NOISESOCKET_SRC
-        "src/client.c"
-        "src/server.c"
+        "src/client.cpp"
+        "src/server.cpp"
+        "src/data.c"
         )
 
 file(GLOB VIRGIL_NOISESOCKET_INCLUDE
+        "include/*.h"
         "include/virgil-noisesocket/*.h"
         )
 
 add_library(
         ${PROJECT_NAME}
 
-         ${VIRGIL_NOISESOCKET_SRC}
-         ${VIRGIL_NOISESOCKET_INCLUDE}
+        ${VIRGIL_NOISESOCKET_SRC}
+        ${VIRGIL_NOISESOCKET_INCLUDE}
 )
 
-add_dependencies(${PROJECT_NAME} noisesocket)
+add_dependencies(${PROJECT_NAME} noisesocket virgil_sdk)
 
-# target_include_directories (${PROJECT_NAME}
-#     PUBLIC
-#     $<BUILD_INTERFACE:${noisesocket_SOURCE_DIR}/ext/noise/src>
-#     $<BUILD_INTERFACE:${noisesocket_SOURCE_DIR}/ext/noise/protocol>
-#     $<BUILD_INTERFACE:${noisesocket_SOURCE_DIR}/include>
-#     $<BUILD_INTERFACE:${noisesocket_SOURCE_DIR}/include/noisesocket>
-#     $<BUILD_INTERFACE:${noisesocket_SOURCE_DIR}/include/noisesocket/backends>
-#     $<BUILD_INTERFACE:${noisesocket_SOURCE_DIR}/include/noisesocket/private>
-#     $<INSTALL_INTERFACE:include>
-#     sodium_INCLUDE_DIR
-# )
-# find_package (Threads)
- target_link_libraries(${PROJECT_NAME} noisesocket)
+ target_include_directories (${PROJECT_NAME}
+     PUBLIC
+     $<BUILD_INTERFACE:${virgil-noisesocket_SOURCE_DIR}/include>
+     $<BUILD_INTERFACE:${virgil-noisesocket_SOURCE_DIR}/include/virgil_noisesocket>
+     $<INSTALL_INTERFACE:include>
+ )
+ find_package (Threads)
+ target_link_libraries(${PROJECT_NAME} noisesocket virgil_sdk)
 
 # Build examples
 #if (ENABLE_EXAMPLES)
      add_subdirectory (examples/client)
      add_subdirectory (examples/server)
 #endif (ENABLE_EXAMPLES)
+
+# Unit tests
+#if (ENABLE_TESTING)
+    enable_testing ()
+    add_subdirectory (tests)
+#endif (ENABLE_TESTING)
 
