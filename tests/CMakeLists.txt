@@ -37,12 +37,11 @@
 cmake_minimum_required(VERSION 3.8)
 
 # Define variables
-set (VIRGIL_NOISESOCKET_LIB_NAME virgil-noisesocket)
 set (TEST_RUNNER virgil_test_runner)
 
 aux_source_directory (${CMAKE_CURRENT_SOURCE_DIR} SRC_LIST)
 add_executable(${TEST_RUNNER} ${SRC_LIST})
-target_link_libraries (${TEST_RUNNER} ${VIRGIL_NOISESOCKET_LIB_NAME})
+target_link_libraries (${TEST_RUNNER} virgil-noisesocket)
 
 add_test (
     NAME ${TEST_RUNNER}

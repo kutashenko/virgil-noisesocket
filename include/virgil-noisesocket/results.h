@@ -9,6 +9,8 @@ typedef enum {
     VN_OK,
     VN_WRONG_PARAM,
     VN_ALLOC_ERROR,
+    VN_LISTEN_ERROR,
+    VN_CONNECT_ERROR,
     VN_GENERAL_ERROR
 } vn_result_t;
 

@@ -58,6 +58,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/ext/virgil-sdk-cpp")
 file(GLOB VIRGIL_NOISESOCKET_SRC
         "src/client.cpp"
         "src/server.cpp"
+        "src/common.c"
         "src/data.c"
         )
 

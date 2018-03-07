@@ -7,31 +7,27 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include "types.h"
-
-#if !defined(DEBUGV)
-#define DEBUGV printf
-#endif
+#include "virgil-noisesocket/results.h"
 
 #if !defined(ASSERT)
 #define ASSERT assert
 #endif
 
 #define CHECK(X) do { \
-    ns_result_t res; \
+    vn_result_t res; \
     res = (X); \
-    if (NS_OK != res) return res; \
+    if (VN_OK != res) return res; \
 } while(0);
 
 #define CHECK_MES(X, MES) do { \
-    ns_result_t res; \
+    vn_result_t res; \
     res = (X); \
-    if (NS_OK != res) { \
+    if (VN_OK != res) { \
         (MES); \
         return res; \
     } \
 } while(0);
 
-#define DEBUG_NOISE printf
+#define LOG printf
 
 #endif //NOISESOCKET_DEBUG_H
