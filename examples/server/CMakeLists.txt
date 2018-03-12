@@ -37,7 +37,7 @@
 cmake_minimum_required(VERSION 3.8)
 
 # Define variables
-set (NOISESOCKET_LIB_NAME noisesocket)
+set (NOISESOCKET_LIB_NAME virgil-noisesocket)
 set (SERVER virgil-server)
 
 aux_source_directory (${CMAKE_CURRENT_SOURCE_DIR} SRC_LIST)

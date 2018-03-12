@@ -6,8 +6,30 @@
 #include <virgil-noisesocket/private/common.h>
 #include <virgil-noisesocket/private/debug.h>
 
+#include <stdlib.h>
 #include <noisesocket.h>
-#include <noisesocket/types.h>
+#include <virgil-noisesocket.h>
+
+#include <virgil/sdk/crypto/Crypto.h>
+#include <virgil/crypto/VirgilKeyPair.h>
+#include <virgil/sdk/client/models/requests/CreateCardRequest.h>
+#include <virgil/sdk/client/Client.h>
+#include <virgil/sdk/client/CardValidator.h>
+#include <virgil/sdk/client/ServiceConfig.h>
+#include <virgil/sdk/client/RequestSigner.h>
+#include <virgil/sdk/client/models/SearchCardsCriteria.h>
+#include <iostream>
+#include <virgil-noisesocket/credentials.h>
+
+using virgil::sdk::crypto::Crypto;
+using virgil::sdk::client::models::requests::CreateCardRequest;
+using virgil::sdk::client::models::SearchCardsCriteria;
+using virgil::sdk::client::models::CardScope;
+using virgil::sdk::client::RequestSigner;
+using virgil::sdk::client::Client;
+using virgil::sdk::client::ServiceConfig;
+using virgil::sdk::client::CardValidator;
+using virgil::crypto::VirgilByteArray;
 
 #define SERVER_CTX(X) ((vn_server_t*)(X->data))
 
@@ -21,6 +43,8 @@ struct vn_server_s {
 
     uint8_t root_public_key[STATIC_KEY_SZ];
 
+    vn_virgil_credentials_t virgil_cretentials;
+
     char *addr;
     uint16_t port;
     uv_tcp_t uv_server;
@@ -33,6 +57,7 @@ extern "C" vn_server_t *
 vn_server_new(const char *addr,
               uint16_t port,
               const char *identity,
+              vn_virgil_credentials_t cretentials,
               uv_loop_t *uv_loop) {
     ASSERT(uv_loop);
     ASSERT(identity);
@@ -55,6 +80,7 @@ vn_server_new(const char *addr,
     server->addr = strdup(addr);
     server->identity = strdup(identity);
     server->uv_loop = uv_loop;
+    server->virgil_cretentials = cretentials;
 
     return server;
 }
@@ -105,43 +131,138 @@ alloc_buffer(uv_handle_t * handle, size_t size, uv_buf_t *buf) {
 }
 
 static int
-on_verify_client(void * empty,
+on_verify_client(void *user_data,
                  const uint8_t *public_key, size_t public_key_len,
                  const uint8_t *meta_data, size_t meta_data_len) {
+
+    uv_tcp_t *socket = (uv_tcp_t*)user_data;
+
+    vn_server_t *server = 0;
+    vn_serverside_client_t *client = 0;
+    ns_get_ctx(socket->data, USER_CTX_0, (void**)&server);
+    ns_get_ctx(socket->data, USER_CTX_1, (void**)&client);
+
+    client->register_only = true;
+
     printf("Verify client\n");
     printf("    Meta data: %s.\n", (const char*)meta_data);
-//    print_buf("    Public key:", public_key, public_key_len);
+    print_buf("    Public key:", public_key, public_key_len);
     return 0;
 }
 
+static void
+on_write(uv_write_t *req, int status) {
+    if (status) {
+        fprintf(stderr, "uv_write error: \n");
+        return;
+    }
+    printf("Client wrote data to client.\n");
+}
+
+static vn_result_t
+_send_register_response(vn_server_t *server,
+                        vn_serverside_client_t *client,
+                        vn_result_t result) {
+
+    uv_buf_t *buf = (uv_buf_t*)calloc(1, sizeof(uv_buf_t));
+    size_t sz = 1;
+    buf->base = (char*)malloc(ns_write_buf_sz(sz));
+    memcpy(buf->base, &result, sz);
+    ns_prepare_write((uv_stream_t*)client->socket,
+                     (uint8_t*)buf->base, sz,
+                     ns_write_buf_sz(sz),
+                     &buf->len);
+
+    uv_write_t request;
+    uv_write(&request, (uv_stream_t*)client->socket, buf, 1, on_write);
+    LOG("Send register response: %s\n", VN_OK == result ? "OK" : "ERROR");
+
+    return VN_OK;
+}
+
+static vn_result_t
+_register_client(vn_server_t *server,
+                 vn_serverside_client_t *client,
+                 const uint8_t *card_request) {
+
+            ASSERT(server);
+            ASSERT(server->virgil_cretentials.private_key_password);
+            ASSERT(server->virgil_cretentials.private_key);
+            ASSERT(server->virgil_cretentials.app_id);
+            ASSERT(server->virgil_cretentials.token);
+
+    const std::string _card_request = (const char *)card_request;
+    const std::string _token = server->virgil_cretentials.token;
+    const std::string _appid = server->virgil_cretentials.app_id;
+    const std::string _private_key_pass = server->virgil_cretentials.private_key_password;
+    const std::string _private_key_str = server->virgil_cretentials.private_key;
+    const VirgilByteArray _private_key = virgil::sdk::VirgilBase64::decode(_private_key_str);
+
+    free((void *) card_request);
+
+    auto crypto = std::make_shared<Crypto>();
+
+    auto serviceConfig = ServiceConfig::createConfig(_token);
+
+    serviceConfig
+            .cardsServiceURL("https://cards.virgilsecurity.com/v4")
+            .cardsServiceROURL("https://cards-ro.virgilsecurity.com/v4");
+
+    auto publicKey = virgil::crypto::VirgilKeyPair::extractPublicKey(_private_key,
+                                                                     virgil::crypto::str2bytes(_private_key_pass));
+
+    auto validator = std::make_unique<CardValidator>(crypto);
+    validator->addVerifier(_appid, publicKey);
+    serviceConfig.cardValidator(std::move(validator));
+
+    Client virgilClient(std::move(serviceConfig));
+
+    RequestSigner signer(crypto);
+
+    auto appPrivateKey = crypto->importPrivateKey(_private_key, _private_key_pass);
+
+    auto request = CreateCardRequest::importFromString(_card_request);
+
+    signer.authoritySign(request, _appid, appPrivateKey);
+
+    auto future = virgilClient.createCard(request);
+    try {
+        auto card = future.get();
+        std::cout << "Output: " << card.identity() << " " << card.createdAt() << " " << card.cardVersion() << std::endl;
+        _send_register_response(server, client, VN_OK);
+    } catch (...) {
+        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
+    }
+
+    return VN_OK;
+}
 
 static void
-on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+on_read(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf) {
     if (nread  <= 0) {
         fprintf(stderr, "Read error!\n");
-        ns_close((uv_handle_t *)client, NULL);
+        ns_close((uv_handle_t *)socket, NULL);
         return;
     }
 
-    if (nread > 0) {
-        char str_buf[nread + 1];
-        memcpy(str_buf, buf->base, nread);
-        str_buf[nread] = 0;
-        printf("\n\n%s\n\n", str_buf);
-    }
+    vn_server_t *server = 0;
+    vn_serverside_client_t *client = 0;
+    ns_get_ctx(socket->data, USER_CTX_0, (void**)&server);
+    ns_get_ctx(socket->data, USER_CTX_1, (void**)&client);
 
-//    uv_write_t *write_req = (uv_write_t *) malloc(sizeof(uv_write_t));
-//    uv_buf_t send_buf;
-//    send_buf.base = malloc(1024);
-//    http_str(send_buf.base);
-//    write_req->data = (void *)send_buf.base;
-//    if (NS_OK != ns_prepare_write(client,
-//                                  (uint8_t*)send_buf.base, strlen(send_buf.base) + 1,
-//                                  1024, &send_buf.len)) {
-//        printf("ERROR: Cannot prepare data to send.");
-//    }
-//
-//    uv_write(write_req, client, &send_buf, 1, echo_write);
+    if (client->register_only) {
+        LOG("Register new client.\n");
+        uint8_t *data = (uint8_t*)malloc(nread);
+        memcpy(data, buf->base, nread);
+
+        // TODO: Be careful here ! Think about socket close and response after it.
+        std::thread{_register_client, server, client, data}.detach();
+        LOG("Wait registration...\n");
+        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
+    } else {
+        LOG("Wrong registration state.\n");
+        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
+    }
 }
 
 static void
@@ -150,23 +271,32 @@ on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    uv_tcp_t *client = (uv_tcp_t *) malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(SERVER_CTX(server)->uv_loop, client);
+    LOG("On new connection ...");
 
-    if (uv_accept(server, (uv_stream_t *) client) == 0) {
+    uv_tcp_t *socket = (uv_tcp_t *) malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(SERVER_CTX(server)->uv_loop, socket);
+
+    if (uv_accept(server, (uv_stream_t *) socket) == 0) {
 
         ns_crypto_t crypto_ctx;
         _fill_crypto_ctx(SERVER_CTX(server), &crypto_ctx);
 
-        ns_tcp_connect_client(client,
+        vn_serverside_client_t *client = (vn_serverside_client_t *)calloc(1, sizeof(vn_serverside_client_t));
+        client->socket = socket;
+
+        ns_tcp_connect_client(socket,
                               &crypto_ctx,
                               ns_negotiation_default_params(),
                               on_session_ready,
                               alloc_buffer,
                               on_read,
                               on_verify_client);
+
+        vn_server_t *vn_server = (vn_server_t*)server->data;
+        ns_set_ctx(socket->data, USER_CTX_0, vn_server);
+        ns_set_ctx(socket->data, USER_CTX_1, client);
     } else {
-        ns_close((uv_handle_t*) client, NULL);
+        ns_close((uv_handle_t*) socket, NULL);
     }
 }
 

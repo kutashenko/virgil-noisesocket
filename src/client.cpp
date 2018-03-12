@@ -11,7 +11,6 @@
 
 #include <virgil/sdk/client/models/requests/CreateCardRequest.h>
 #include <virgil/sdk/crypto/Crypto.h>
-#include <noisesocket/types.h>
 
 using virgil::sdk::client::models::requests::CreateCardRequest;
 using virgil::sdk::crypto::CryptoInterface;
@@ -114,6 +113,15 @@ _fill_crypto_ctx(vn_client_t *client, ns_crypto_t *crypto_ctx) {
 }
 
 static void
+on_write(uv_write_t *req, int status) {
+    if (status) {
+        fprintf(stderr, "uv_write error: \n");
+        return;
+    }
+    printf("Client wrote data to server.\n");
+}
+
+static void
 on_registration_session_ready(uv_tcp_t *handle, ns_result_t result) {
 
     if (NS_OK != result) {
@@ -124,21 +132,25 @@ on_registration_session_ready(uv_tcp_t *handle, ns_result_t result) {
 
     printf("Connection to server is done.\n");
 
-//    if ()
+    vn_client_t *client = 0;
+    ns_get_ctx(handle->data, USER_CTX_0, (void**)&client);
 
-//    const char *test = "Hello world !!!";
-//
-//    uv_buf_t buf;
-//    size_t sz = strlen(test) + 1;
-//    buf.base = malloc(ns_write_buf_sz(sz));
-//    strcpy(buf.base, test);
-//    ns_prepare_write((uv_stream_t*)handle,
-//                     (uint8_t*)buf.base, sz,
-//                     ns_write_buf_sz(sz),
-//                     &buf.len);
-//
-//    uv_write_t request;
-//    uv_write(&request, (uv_stream_t*)handle, &buf, 1, on_write);
+    if (VN_STATE_REGISTRATION != client->state) {
+        LOG("Incorrect registration state.\n");
+        return;
+    }
+
+    uv_buf_t buf;
+    size_t sz = client->registration_request.sz;
+    buf.base = (char*)malloc(ns_write_buf_sz(sz));
+    memcpy(buf.base, client->registration_request.bytes, sz);
+    ns_prepare_write((uv_stream_t*)handle,
+                     (uint8_t*)buf.base, sz,
+                     ns_write_buf_sz(sz),
+                     &buf.len);
+
+    uv_write_t request;
+    uv_write(&request, (uv_stream_t*)handle, &buf, 1, on_write);
 }
 
 static void
@@ -148,26 +160,36 @@ alloc_cb(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
 }
 
 static int
-on_verify_server(void * empty,
+on_verify_server(void *user_data,
                  const uint8_t *public_key, size_t public_key_len,
                  const uint8_t *meta_data, size_t meta_data_len) {
+
+    uv_tcp_t *socket = (uv_tcp_t*)user_data;
+    vn_client_t *client = 0;
+    ns_get_ctx(socket->data, USER_CTX_0, (void**)&client);
+
     printf("Verify server\n");
     printf("    Meta data: %s.\n", (const char*)meta_data);
-//    print_buf("    Public key:", public_key, public_key_len);
+    print_buf("    Public key:", public_key, public_key_len);
     return 0;
+}
+
+static void
+on_close(uv_handle_t *handle) {
+    printf("closed.\n");
 }
 
 static void
 on_registration_read(uv_stream_t *tcp, ssize_t nread, const uv_buf_t *buf) {
     printf("Registration read\n");
 
-//    if (nread >= 0) {
-//        printf("read: %s\n", buf->base);
-//    } else {
-//        //we got an EOF
-//        ns_close((uv_handle_t *) tcp, on_close);
-//    }
-//
+    if (nread >= 0) {
+        printf("read: %d\n", (int) buf->len);
+    } else {
+        //we got an EOF
+        ns_close((uv_handle_t *) tcp, on_close);
+    }
+
 //    free(buf->base);
 }
 
@@ -207,6 +229,8 @@ vn_client_connect(vn_client_t *ctx,
                                        on_verify_server)) {
         return VN_CONNECT_ERROR;
     }
+
+    ns_set_ctx(ctx->socket.data, USER_CTX_0, ctx);
 
     return VN_OK;
 }

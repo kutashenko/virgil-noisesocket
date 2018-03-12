@@ -1,163 +1,51 @@
-#include <stdio.h>
-#include <stdlib.h>
+//
+// Created by Roman Kutashenko on 2/23/18.
+//
+
+#include <stdbool.h>
 #include <uv.h>
-#include <noisesocket/types.h>
-#include <sodium.h>
-#include "helper.h"
+#include <virgil-noisesocket.h>
+#include <virgil-noisesocket/credentials.h>
 
-#include "noisesocket.h"
-
-static uint8_t root_public_key[] = {
-        0xf5, 0x0f, 0xc3, 0x8d, 0x9d, 0x03, 0xeb, 0xc7, 0x92, 0x9a, 0xb2, 0x67,
-        0xd4, 0x20, 0x13, 0x53, 0x2f, 0x1e, 0x9f, 0x0b, 0x05, 0x74, 0x12, 0x4c,
-        0x0a, 0x0c, 0x33, 0x63, 0x03, 0x20, 0xb4, 0x73
-};
-
-static uint8_t root_private_key[] = {
-        0x87, 0xc1, 0xcb, 0xe3, 0x3e, 0x50, 0x2f, 0xcc, 0x81, 0xc4, 0xb6, 0xfb,
-        0x46, 0x29, 0xe4, 0x2b, 0xee, 0x00, 0x1c, 0xf4, 0xb9, 0xcf, 0x93, 0x02,
-        0x5e, 0xb4, 0x1d, 0xc2, 0x46, 0xa3, 0x5c, 0xea, 0xf5, 0x0f, 0xc3, 0x8d,
-        0x9d, 0x03, 0xeb, 0xc7, 0x92, 0x9a, 0xb2, 0x67, 0xd4, 0x20, 0x13, 0x53,
-        0x2f, 0x1e, 0x9f, 0x0b, 0x05, 0x74, 0x12, 0x4c, 0x0a, 0x0c, 0x33, 0x63,
-        0x03, 0x20, 0xb4, 0x73
-};
-
-static uint8_t public_key[] = {
-        0x2f, 0xd5, 0xe6, 0xe6, 0xac, 0xb5, 0xed, 0x96, 0x7a, 0xac, 0x13, 0x1d,
-        0xd4, 0x3b, 0x27, 0xe6, 0x26, 0x4e, 0xc9, 0x2e, 0xef, 0x51, 0x58, 0x58,
-        0x2b, 0xec, 0xdb, 0xcb, 0x59, 0xc9, 0x3c, 0x41
-};
-
-static uint8_t private_key[] = {
-        0x4c, 0xf9, 0xb0, 0x6f, 0x7b, 0xd3, 0x12, 0x0a, 0xc0, 0xde, 0x8a, 0xba,
-        0x3e, 0x81, 0x84, 0xcc, 0x7e, 0x61, 0x4f, 0xdd, 0x48, 0x0d, 0x71, 0x82,
-        0xf6, 0xa1, 0x0c, 0x73, 0xc9, 0x2c, 0x46, 0x2c
-};
-
-uv_loop_t *loop;
-
-static void
-alloc_buffer(uv_handle_t * handle, size_t size, uv_buf_t *buf) {
-    buf->base = malloc(size);
-    buf->len = size;
-}
-
-static void
-echo_write(uv_write_t *req, int status) {
-    if (status == -1) {
-        fprintf(stderr, "Write error!\n");
-    }
-    char *base = (char *) req->data;
-    free(base);
-    free(req);
-}
+uv_loop_t *uv_loop = NULL;
 
 void
-http_str(char *buf) {
-    static const char * resp = "HTTP/1.1 200 OK\r\nDate: Sun, 18 Feb 2018 08:56:53 GMT\r\nServer: Test Noise Socket    \r\nLast-Modified: Sat, 20 Nov 2004 07:16:26 GMT\r\nETag: \"10000000565a5-2c-3e94b66c2e680\"\r\nAccept-Ranges: bytes\r\nContent-Length: 44\r\nConnection: close\r\nContent-Type: text/html\r\nX-Pad: avoid browser bug\r\n\r\n<html><body><h1>It works!</h1></body></html>\r\n\r\n";
-    strcpy(buf, resp);
-}
+client_reg_result_cb(vn_client_t *ctx, vn_result_t result) {
 
-static void
-echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
-    if (nread  <= 0) {
-        fprintf(stderr, "Read error!\n");
-        ns_close((uv_handle_t *)client, NULL);
-        return;
-    }
-
-    if (nread > 0) {
-        char str_buf[nread + 1];
-        memcpy(str_buf, buf->base, nread);
-        str_buf[nread] = 0;
-        printf("\n\n%s\n\n", str_buf);
-    }
-
-    uv_write_t *write_req = (uv_write_t *) malloc(sizeof(uv_write_t));
-    uv_buf_t send_buf;
-    send_buf.base = malloc(1024);
-    http_str(send_buf.base);
-    write_req->data = (void *)send_buf.base;
-    if (NS_OK != ns_prepare_write(client,
-                                  (uint8_t*)send_buf.base, strlen(send_buf.base) + 1,
-                                  1024, &send_buf.len)) {
-        printf("ERROR: Cannot prepare data to send.");
-    }
-
-    uv_write(write_req, client, &send_buf, 1, echo_write);
-}
-
-static void
-session_ready_cb(uv_tcp_t *client, ns_result_t result) {
-
-    if (NS_OK != result) {
-        printf("Session error %d.\n", (int)result);
-        ns_close((uv_handle_t*)client, NULL);
-        return;
-    }
-
-    printf("Connected.\n");
-}
-
-static int
-verify_sender(void * empty, const uint8_t *id,
-              const uint8_t *public_key, size_t public_key_len) {
-    printf("Verify client\n");
-    printf("    Sender ID: %s.\n", (const char*)id);
-    print_buf("    Public key:", public_key, public_key_len);
-    return 0;
-}
-
-static void
-on_new_connection(uv_stream_t *server, int status) {
-    if (status == -1) {
-        return;
-    }
-
-    uv_tcp_t *client = (uv_tcp_t *) malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(loop, client);
-    if (uv_accept(server, (uv_stream_t *) client) == 0) {
-
-        ns_crypto_t crypto_ctx;
-        crypto_ctx.public_key = public_key;
-        crypto_ctx.public_key_sz = sizeof(public_key);
-        crypto_ctx.private_key = private_key;
-        crypto_ctx.private_key_sz = sizeof(private_key);
-        crypto_ctx.root_public_key = root_public_key;
-        crypto_ctx.root_public_key_sz = sizeof(root_public_key);
-        crypto_ctx.root_signature_sz = 64;
-        unsigned char *p = malloc(crypto_ctx.root_signature_sz);
-        crypto_ctx.root_signature = p;
-        strcpy((char*)crypto_ctx.id, "SERVER");
-
-        crypto_sign_ed25519_detached(p, NULL, public_key, sizeof(public_key), root_private_key);
-
-        ns_tcp_connect_client(client,
-                              &crypto_ctx,
-                              ns_negotiation_default_params(),
-                              session_ready_cb,
-                              alloc_buffer,
-                              echo_read,
-                              verify_sender);
-    } else {
-        ns_close((uv_handle_t*) client, NULL);
-    }
 }
 
 int
-main(int argc, char **argv) {
-    loop = uv_default_loop();
+main() {
 
-    uv_tcp_t server;
-    uv_tcp_init(loop, &server);
+    const char *addr = "0.0.0.0";
+    uint16_t port = 31000;
 
-    struct sockaddr_in bind_addr;
-    uv_ip4_addr("0.0.0.0", 30000, &bind_addr);
-    uv_tcp_bind(&server, (const struct sockaddr *) &bind_addr, 0);
-    int r = uv_listen((uv_stream_t *) &server, 128, on_new_connection);
-    if (r) {
-        fprintf(stderr, "Listen error!\n");
-        return 1;
-    }
-    return uv_run(loop, UV_RUN_DEFAULT);
+    const char *test_identity = "5edfb645-b32d-486d-af22-719a717f2062";
+    const char *test_password = "qweASD123";
+
+    vn_ticket_t ticket;
+
+    vn_client_t *client = NULL;
+    vn_server_t *server = NULL;
+
+    // Create UV loops
+    uv_loop = uv_default_loop();
+
+    vn_virgil_credentials_t virgil_credentials;
+    virgil_credentials.token = "AT.1e4554197853556d3f66fb71afb15629524eae58ba4fd59ba4f94959b8d18677";
+    virgil_credentials.app_id = "8348cc9c0cff04328404b8b1122b18caa1cbb1e9b30e9386a0dc543c9a803a2d";
+    virgil_credentials.private_key = "MIGhMF0GCSqGSIb3DQEFDTBQMC8GCSqGSIb3DQEFDDAiBBAtpTHSss+sKcW0Z5RvVwgKAgIfeDAKBggqhkiG9w0CCjAdBglghkgBZQMEASoEEJm+qFYlntvXKZQymeuTXD8EQPVyCvP521iWDJJfeBo2lwOf/FvfFsD3Dzayytw81V9TdxddCemntdHM2F8GgpQ+hDLZtKUyaXgzUBjSqCu0K+w=";
+    virgil_credentials.private_key_password = "qweASD123";
+
+    // Start server
+    server = vn_server_new(addr, port,
+                           "TEST_SERVER",
+                           virgil_credentials,
+                           uv_loop);
+    vn_server_start(server);
+    uv_run(uv_loop, UV_RUN_DEFAULT);
+
+    vn_server_free(server);
+
+    return 0;
 }
