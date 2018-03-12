@@ -149,8 +149,8 @@ on_registration_session_ready(uv_tcp_t *handle, ns_result_t result) {
                      ns_write_buf_sz(sz),
                      &buf.len);
 
-    uv_write_t request;
-    uv_write(&request, (uv_stream_t*)handle, &buf, 1, on_write);
+    uv_write_t *request = (uv_write_t*)calloc(1, sizeof(uv_write_t));
+    uv_write(request, (uv_stream_t*)handle, &buf, 1, on_write);
 }
 
 static void

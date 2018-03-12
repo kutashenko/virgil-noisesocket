@@ -173,8 +173,8 @@ _send_register_response(vn_server_t *server,
                      ns_write_buf_sz(sz),
                      &buf->len);
 
-    uv_write_t request;
-    uv_write(&request, (uv_stream_t*)client->socket, buf, 1, on_write);
+    uv_write_t *request = (uv_write_t*)calloc(1, sizeof(uv_write_t));
+    uv_write(request, (uv_stream_t*)client->socket, buf, 1, on_write);
     LOG("Send register response: %s\n", VN_OK == result ? "OK" : "ERROR");
 
     return VN_OK;
@@ -258,7 +258,6 @@ on_read(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf) {
         // TODO: Be careful here ! Think about socket close and response after it.
         std::thread{_register_client, server, client, data}.detach();
         LOG("Wait registration...\n");
-        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
     } else {
         LOG("Wrong registration state.\n");
         _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
