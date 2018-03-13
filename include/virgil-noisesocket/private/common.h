@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <virgil-noisesocket/general.h>
+#include <virgil-noisesocket/data.h>
 
 #define NAME_MAX_SZ     (2 * ID_MAX_SZ)
 
@@ -23,7 +24,7 @@ vn_name_by_id(const uint8_t id[ID_MAX_SZ],
               char name[NAME_MAX_SZ]);
 
 vn_result_t
-vn_sign_static_key(const uint8_t private_key[PRIVATE_KEY_SZ],
+vn_sign_static_key(const vn_data_t *private_key,
                    const uint8_t static_public_key[STATIC_KEY_SZ],
                    uint8_t signature[SIGNATURE_SZ]);
 

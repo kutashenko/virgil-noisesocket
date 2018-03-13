@@ -82,12 +82,15 @@ vn_server_new(const char *addr,
         return NULL;
     }
 
-    uint8_t private_key[PRIVATE_KEY_SZ];
-    uint8_t public_key[PUBLIC_KEY_SZ];
+    vn_data_t private_key;
+    vn_data_t public_key;
+
+    memset(&private_key, 0, sizeof(private_key));
+    memset(&public_key, 0, sizeof(public_key));
 
     bool is_signed = false;
-    if (VN_OK == vn_storage_load_keys(server->id, private_key, public_key)) {
-        if (VN_OK == vn_sign_static_key(private_key,
+    if (VN_OK == vn_storage_load_keys(server->id, &private_key, &public_key)) {
+        if (VN_OK == vn_sign_static_key(&private_key,
                                         server->static_public_key,
                                         server->static_signature)) {
             LOG("Static key has been signed successfuly.");

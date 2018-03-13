@@ -10,6 +10,9 @@
 #include <virgil-noisesocket/storage.h>
 #include <virgil-noisesocket/data.h>
 
+#define PRIVATE_KEY_SZ  (136)
+#define PUBLIC_KEY_SZ   (128)
+
 static bool
 test_simple_save_load() {
     const char *name = "virgil-noisesocket-test.dat";
@@ -83,29 +86,39 @@ static bool
 test_simple_save_keypair() {
     uint8_t id[ID_MAX_SZ];
 
-    uint8_t private_key_in[PRIVATE_KEY_SZ];
-    uint8_t public_key_in[PUBLIC_KEY_SZ];
+    vn_data_t private_key_in;
+    vn_data_t public_key_in;
 
-    uint8_t private_key_out[PRIVATE_KEY_SZ];
-    uint8_t public_key_out[PUBLIC_KEY_SZ];
+    vn_data_t private_key_out;
+    vn_data_t public_key_out;
+
+    vn_data_init_alloc(&private_key_in, PRIVATE_KEY_SZ);
+    vn_data_init_alloc(&public_key_in, PUBLIC_KEY_SZ);
+    memset(&private_key_out, 0, sizeof(private_key_out));
+    memset(&public_key_out, 0, sizeof(public_key_out));
 
     memset(id, 0xAA, ID_MAX_SZ);
-    memset(private_key_in, 0xAB, PRIVATE_KEY_SZ);
-    memset(public_key_in, 0xCD, PUBLIC_KEY_SZ);
-    memset(private_key_out, 0, PRIVATE_KEY_SZ);
-    memset(public_key_out, 0, PUBLIC_KEY_SZ);
+    memset(private_key_in.bytes, 0xAB, PRIVATE_KEY_SZ);
+    memset(public_key_in.bytes, 0xCD, PUBLIC_KEY_SZ);
+
+    bool res = false;
 
     if (VN_OK == vn_storage_save_keys(id,
-                                      private_key_in,
-                                      public_key_in)
+                                      &private_key_in,
+                                      &public_key_in)
             && VN_OK == vn_storage_load_keys(id,
-                                             private_key_out,
-                                             public_key_out)) {
-        return 0 == memcmp(private_key_in, private_key_out, PRIVATE_KEY_SZ)
-                && 0 == memcmp(public_key_in, public_key_out, PUBLIC_KEY_SZ);
+                                             &private_key_out,
+                                             &public_key_out)) {
+        res = 0 == memcmp(private_key_in.bytes, private_key_out.bytes, private_key_in.sz)
+                && 0 == memcmp(public_key_in.bytes, public_key_out.bytes, public_key_in.sz);
     }
 
-    return false;
+    vn_data_free(&private_key_in);
+    vn_data_free(&public_key_in);
+    vn_data_free(&private_key_out);
+    vn_data_free(&public_key_out);
+
+    return res;
 }
 
 void test_storage() {

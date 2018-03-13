@@ -85,8 +85,17 @@ _prepare_names(const uint8_t id[ID_MAX_SZ],
 
 vn_result_t
 vn_storage_load_keys(const uint8_t id[ID_MAX_SZ],
-                     uint8_t private_key[PRIVATE_KEY_SZ],
-                     uint8_t public_key[PUBLIC_KEY_SZ]) {
+                     vn_data_t *private_key,
+                     vn_data_t *public_key) {
+
+    ASSERT(id);
+    ASSERT(private_key);
+    ASSERT(public_key);
+
+    if (!id || !private_key || !public_key) {
+        return VN_WRONG_PARAM;
+    }
+
     char private_key_path[PATH_MAX];
     char public_key_path[PATH_MAX];
 
@@ -94,31 +103,28 @@ vn_storage_load_keys(const uint8_t id[ID_MAX_SZ],
         return VN_SAVE_ERROR;
     }
 
-    bool res = false;
-    vn_data_t private_key_data;
-    vn_data_t public_key_data;
-
-    memset(&private_key_data, 0, sizeof(private_key_data));
-    memset(&public_key_data, 0, sizeof(public_key_data));
-
-    if (VN_OK == vn_storage_load(private_key_path, &private_key_data)
-        && VN_OK == vn_storage_load(public_key_path, &public_key_data)) {
-
-        memcpy(private_key, private_key_data.bytes, PRIVATE_KEY_SZ);
-        memcpy(public_key, public_key_data.bytes, PUBLIC_KEY_SZ);
-        res = true;
+    if (VN_OK == vn_storage_load(private_key_path, private_key)
+        && VN_OK == vn_storage_load(public_key_path, public_key)) {
+        return VN_OK;
     }
 
-    vn_data_free(&private_key_data);
-    vn_data_free(&public_key_data);
-
-    return res ? VN_OK : VN_LOAD_ERROR;
+    return VN_LOAD_ERROR;
 }
 
 vn_result_t
 vn_storage_save_keys(const uint8_t id[ID_MAX_SZ],
-                     const uint8_t private_key[PRIVATE_KEY_SZ],
-                     const uint8_t public_key[PUBLIC_KEY_SZ]) {
+                     const vn_data_t *private_key,
+                     const vn_data_t *public_key) {
+
+    ASSERT(id);
+    ASSERT(private_key && private_key->bytes);
+    ASSERT(public_key && public_key->bytes);
+
+    if (!id || !private_key || !private_key->bytes
+            || !public_key || !public_key->bytes) {
+        return VN_WRONG_PARAM;
+    }
+
     char private_key_path[PATH_MAX];
     char public_key_path[PATH_MAX];
 
@@ -127,14 +133,9 @@ vn_storage_save_keys(const uint8_t id[ID_MAX_SZ],
     }
 
     bool res = false;
-    vn_data_t private_key_data;
-    vn_data_t public_key_data;
 
-    vn_data_init_set(&private_key_data, private_key, PRIVATE_KEY_SZ);
-    vn_data_init_set(&public_key_data, public_key, PUBLIC_KEY_SZ);
-
-    if (VN_OK == vn_storage_save(private_key_path, &private_key_data)
-        && VN_OK == vn_storage_save(public_key_path, &public_key_data)) {
+    if (VN_OK == vn_storage_save(private_key_path, private_key)
+        && VN_OK == vn_storage_save(public_key_path, public_key)) {
         return VN_OK;
     }
 

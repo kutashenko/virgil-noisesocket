@@ -21,13 +21,13 @@ vn_storage_save(const char *name, const vn_data_t *data);
 
 vn_result_t
 vn_storage_load_keys(const uint8_t id[ID_MAX_SZ],
-                     uint8_t private_key[PRIVATE_KEY_SZ],
-                     uint8_t public_key[PUBLIC_KEY_SZ]);
+                     vn_data_t *private_key,
+                     vn_data_t *public_key);
 
 vn_result_t
 vn_storage_save_keys(const uint8_t id[ID_MAX_SZ],
-                     const uint8_t private_key[PRIVATE_KEY_SZ],
-                     const uint8_t public_key[PUBLIC_KEY_SZ]);
+                     const vn_data_t *private_key,
+                     const vn_data_t *public_key);
 
 #ifdef __cplusplus
 }
