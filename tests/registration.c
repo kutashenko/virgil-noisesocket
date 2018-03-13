@@ -12,9 +12,18 @@
 
 uv_loop_t *uv_loop = NULL;
 
+vn_client_t *client = NULL;
+vn_server_t *server = NULL;
+
+vn_result_t register_result;
+
 void
 client_reg_result_cb(vn_client_t *ctx, vn_result_t result) {
+    register_result = result;
 
+    printf("Registration result: %s\n", VN_OK == result ? "OK" : "ERROR");
+
+    vn_server_stop(server);
 }
 
 void
@@ -27,9 +36,6 @@ test_registration() {
     const char *test_password = "qweASD123";
 
     vn_ticket_t ticket;
-
-    vn_client_t *client = NULL;
-    vn_server_t *server = NULL;
 
     // Create UV loops
     uv_loop = uv_default_loop();
@@ -63,6 +69,6 @@ test_registration() {
     vn_client_free(client);
     vn_server_free(server);
 
-    TEST_CHECK_(false, "Registration error!\n");
+    TEST_CHECK_(VN_OK == register_result, "Registration error!\n");
 
 }

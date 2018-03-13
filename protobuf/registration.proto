@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+import "nanopb.proto";
+
+message registration_request {
+    string card_creation_request = 1 [(nanopb).max_size = 1024];
+}
+
+message registration_response {
+    uint32 result = 2;
+}

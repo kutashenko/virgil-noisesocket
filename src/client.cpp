@@ -12,10 +12,15 @@
 #include <virgil/sdk/client/models/requests/CreateCardRequest.h>
 #include <virgil/sdk/crypto/Crypto.h>
 
+#include <pb_encode.h>
+#include <pb_decode.h>
+#include <meta.pb.h>
+#include <registration.pb.h>
+#include <virgil-noisesocket/data.h>
+
 using virgil::sdk::client::models::requests::CreateCardRequest;
 using virgil::sdk::crypto::CryptoInterface;
 
-//namespace vcrypto = virgil::sdk::crypto::Crypto;
 namespace vsdk = virgil::sdk;
 
 typedef enum {
@@ -190,6 +195,26 @@ on_registration_read(uv_stream_t *tcp, ssize_t nread, const uv_buf_t *buf) {
         ns_close((uv_handle_t *) tcp, on_close);
     }
 
+    // Get protobuf data
+
+    registration_response message = registration_response_init_zero;
+
+    pb_istream_t stream = pb_istream_from_buffer((pb_byte_t *)buf->base, nread);
+
+    if (!pb_decode(&stream, registration_response_fields, &message)) {
+        LOG("Decoding failed: %s\n", PB_GET_ERROR(&stream));
+        return;
+    }
+
+    vn_client_t *client = 0;
+    ns_get_ctx(tcp->data, USER_CTX_0, (void**)&client);
+
+    if (client->registration_done_cb) {
+        client->registration_done_cb(client, (vn_result_t)message.result);
+    }
+
+    ns_close((uv_handle_t *) tcp, on_close);
+
 //    free(buf->base);
 }
 
@@ -267,15 +292,36 @@ vn_client_register(vn_client_t *ctx,
     auto signature = crypto.generateSignature(fingerprint.value(), keyPair.privateKey());
     request.addSignature(signature, fingerprint.hexValue());
 
-    // Send Card request to server
     ctx->registration_done_cb = done_cb;
 
     auto cardRequest = request.exportAsString();
 
+
+    // Create protobuf data
     vn_data_free(&ctx->registration_request);
-    vn_data_init_copy(&ctx->registration_request,
-                      (const uint8_t*)cardRequest.c_str(),
-                      cardRequest.size() + 1);
+    vn_data_init_alloc(&ctx->registration_request, REGISTATION_DATA_MAX_SZ);
+
+    registration_request message = registration_request_init_zero;
+
+    // Create a stream that will write to our buffer.
+    pb_ostream_t stream = pb_ostream_from_buffer(ctx->registration_request.bytes,
+                                                 ctx->registration_request.sz);
+
+    if (cardRequest.size() + 1 > sizeof(message.card_creation_request)) {
+        LOG("Card request too long.");
+        return VN_CANNOT_REGISTER_CLIENT;
+    }
+
+    strcpy(message.card_creation_request, cardRequest.c_str());
+
+    if (!pb_encode(&stream, registration_request_fields, &message)) {
+        LOG("Cannot encode registration request %s\n.", PB_GET_ERROR(&stream));
+        return VN_CANNOT_REGISTER_CLIENT;
+    }
+
+    ctx->registration_request.sz = stream.bytes_written;
+
+    // Send Card request to server
     ctx->state = VN_STATE_REGISTRATION;
 
     return vn_client_connect(ctx,

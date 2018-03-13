@@ -67,11 +67,37 @@ file(GLOB VIRGIL_NOISESOCKET_INCLUDE
         "include/virgil-noisesocket/*.h"
         )
 
+########### Generate Protobuf structures ###########
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ext/libnoisesocket/protobuf/nanopb/extra)
+find_package(Nanopb REQUIRED)
+
+if (NOT ${NANOPB_FOUND})
+    message (FATAL_ERROR "NanoPB not found")
+endif()
+
+message (NANOPB_INCLUDE_DIRS = ${NANOPB_INCLUDE_DIRS})
+message (PROTOBUF_PROTOC_EXECUTABLE = ${PROTOBUF_PROTOC_EXECUTABLE})
+message (NANOPB_GENERATOR_SOURCE_DIR = ${NANOPB_GENERATOR_SOURCE_DIR})
+
+include_directories(${NANOPB_INCLUDE_DIRS})
+nanopb_generate_cpp(VIRGIL_PROTO_SRC VIRGIL_PROTO_INCLUDE
+        ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/meta.proto
+        ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/registration.proto
+        )
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(${VIRGIL_PROTO_SRC} ${VIRGIL_PROTO_INCLUDE}
+        PROPERTIES GENERATED TRUE)
+
+########### Add Virgil NoiseSocket protocol library ###########
+add_definitions(-DPB_FIELD_16BIT=1)
 add_library(
         ${PROJECT_NAME}
 
         ${VIRGIL_NOISESOCKET_SRC}
         ${VIRGIL_NOISESOCKET_INCLUDE}
+
+        ${VIRGIL_PROTO_SRC}
+        ${VIRGIL_PROTO_INCLUDE}
 )
 
 add_dependencies(${PROJECT_NAME} noisesocket virgil_sdk)

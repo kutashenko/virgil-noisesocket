@@ -7,4 +7,7 @@
 
 #define IDENTITY_TYPE ("Noise identity")
 
+#define META_DATA_MAX_SZ (256)
+#define REGISTATION_DATA_MAX_SZ (1024)
+
 #endif //VIRGIL_NOISESOCKET_GENERAL_H

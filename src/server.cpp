@@ -6,7 +6,7 @@
 #include <virgil-noisesocket/private/common.h>
 #include <virgil-noisesocket/private/debug.h>
 
-#include <stdlib.h>
+#include <string.h>
 #include <noisesocket.h>
 #include <virgil-noisesocket.h>
 
@@ -30,6 +30,12 @@ using virgil::sdk::client::Client;
 using virgil::sdk::client::ServiceConfig;
 using virgil::sdk::client::CardValidator;
 using virgil::crypto::VirgilByteArray;
+
+#include <pb_encode.h>
+#include <pb_decode.h>
+#include <meta.pb.h>
+#include <registration.pb.h>
+#include <virgil-noisesocket/data.h>
 
 #define SERVER_CTX(X) ((vn_server_t*)(X->data))
 
@@ -164,12 +170,25 @@ _send_register_response(vn_server_t *server,
                         vn_serverside_client_t *client,
                         vn_result_t result) {
 
+    // Create protobuf data
     uv_buf_t *buf = (uv_buf_t*)calloc(1, sizeof(uv_buf_t));
-    size_t sz = 1;
+    size_t sz = registration_response_size;
     buf->base = (char*)malloc(ns_write_buf_sz(sz));
-    memcpy(buf->base, &result, sz);
+
+    registration_response message = registration_response_init_zero;
+
+    // Create a stream that will write to our buffer.
+    pb_ostream_t stream = pb_ostream_from_buffer((pb_byte_t*)buf->base, sz);
+
+    message.result = result;
+
+    if (!pb_encode(&stream, registration_request_fields, &message)) {
+        LOG("Cannot encode registration request %s\n.", PB_GET_ERROR(&stream));
+        return VN_CANNOT_REGISTER_CLIENT;
+    }
+
     ns_prepare_write((uv_stream_t*)client->socket,
-                     (uint8_t*)buf->base, sz,
+                     (uint8_t*)buf->base, stream.bytes_written,
                      ns_write_buf_sz(sz),
                      &buf->len);
 
@@ -252,8 +271,21 @@ on_read(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf) {
 
     if (client->register_only) {
         LOG("Register new client.\n");
+
+        // Get protobuf data
+
+        registration_request message = registration_request_init_zero;
+
+        pb_istream_t stream = pb_istream_from_buffer((pb_byte_t *)buf->base, nread);
+
+        if (!pb_decode(&stream, registration_request_fields, &message)) {
+            LOG("Decoding failed: %s\n", PB_GET_ERROR(&stream));
+            _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
+            return;
+        }
+
         uint8_t *data = (uint8_t*)malloc(nread);
-        memcpy(data, buf->base, nread);
+        strcpy((char*)data, message.card_creation_request);
 
         // TODO: Be careful here ! Think about socket close and response after it.
         std::thread{_register_client, server, client, data}.detach();
@@ -326,5 +358,7 @@ vn_server_start(vn_server_t *server) {
 
 extern "C" vn_result_t
 vn_server_stop(vn_server_t *server) {
+    ASSERT(server);
+    uv_close((uv_handle_t*)&server->uv_server, NULL);
     return VN_GENERAL_ERROR;
 }

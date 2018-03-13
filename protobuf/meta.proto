@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+import "nanopb.proto";
+
+message meta_info_request {
+    bool is_registration = 1;
+    string client_id = 2 [(nanopb).max_size = 50];
+}
