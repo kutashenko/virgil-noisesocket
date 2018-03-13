@@ -122,6 +122,9 @@ _fill_crypto_ctx(vn_client_t *client, ns_crypto_t *crypto_ctx) {
     message.is_registration =  VN_STATE_REGISTRATION == client->state;
     memcpy(message.client_id, client->id, ID_MAX_SZ);
 
+    message.signature.size = SIGNATURE_SZ;
+    memcpy(message.signature.bytes, client->static_signature, SIGNATURE_SZ);
+
     if (!pb_encode(&stream, meta_info_request_fields, &message)) {
         LOG("Cannot encode meta request %s\n.", PB_GET_ERROR(&stream));
         return VN_CANNOT_REGISTER_CLIENT;

@@ -122,6 +122,8 @@ _fill_crypto_ctx(vn_server_t *server, ns_crypto_t *crypto_ctx) {
 
     message.is_registration = false;
     memcpy(message.client_id, server->id, ID_MAX_SZ);
+    message.signature.size = SIGNATURE_SZ;
+    memcpy(message.signature.bytes, server->static_signature, SIGNATURE_SZ);
 
     if (!pb_encode(&stream, meta_info_request_fields, &message)) {
         LOG("Cannot encode meta request %s\n.", PB_GET_ERROR(&stream));
