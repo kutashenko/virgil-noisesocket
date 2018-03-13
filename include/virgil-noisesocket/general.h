@@ -11,7 +11,6 @@
 #define REGISTATION_DATA_MAX_SZ (1024)
 
 #define STATIC_KEY_SZ   (32)
-#define SIGNATURE_SZ    (64)
-#define ID_MAX_SZ       (64)
+#define ID_MAX_SZ       (70)
 
 #endif //VIRGIL_NOISESOCKET_GENERAL_H

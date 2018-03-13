@@ -32,7 +32,7 @@ on_read(uv_stream_t *stream,
 void
 test_verified_connection() {
     const char *addr = "0.0.0.0";
-    uint16_t port = 31000;
+    uint16_t port = 30005;
 
     const char *test_identity = "5edfb645-b32d-486d-af22-719a717f2062";
     const char *test_password = "qweASD123";

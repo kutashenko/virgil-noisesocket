@@ -35,13 +35,13 @@ struct vn_client_s {
     uint8_t static_public_key[STATIC_KEY_SZ];
     uint8_t static_private_key[STATIC_KEY_SZ];
 
-    uint8_t static_signature[SIGNATURE_SZ];
+    vn_data_t static_signature;
 
     uint8_t root_public_key[STATIC_KEY_SZ];
 
     char *password;
 
-    vn_data_t card;
+    vn_data_t card_id;
     vn_data_t private_key;
 
     vn_client_reg_result_cb_t registration_done_cb;
@@ -94,10 +94,13 @@ vn_client_new(const char *identity,
     memset(&public_key, 0, sizeof(public_key));
 
     bool is_signed = false;
-    if (VN_OK == vn_storage_load_keys(client->id, &private_key, &public_key)) {
+    if (VN_OK == vn_storage_load_keys(client->id, &private_key, &public_key)
+            && VN_OK == vn_storage_load_card_id(client->id, &client->card_id)) {
+
         if (VN_OK == vn_sign_static_key(&private_key,
+                                        client->password,
                                         client->static_public_key,
-                                        client->static_signature)) {
+                                        &client->static_signature)) {
             LOG("Static key has been signed successfuly.");
             is_signed = true;
         }
@@ -120,7 +123,7 @@ vn_client_free(vn_client_t *ctx) {
 
     free(ctx->password);
 
-    vn_data_free(&ctx->card);
+    vn_data_free(&ctx->card_id);
     vn_data_free(&ctx->private_key);
 
     free(ctx);
@@ -140,11 +143,11 @@ _fill_crypto_ctx(vn_client_t *client, ns_crypto_t *crypto_ctx) {
     // Create a stream that will write to our buffer.
     pb_ostream_t stream = pb_ostream_from_buffer(crypto_ctx->meta_data, META_DATA_LEN);
 
-    message.is_registration =  VN_STATE_REGISTRATION == client->state;
-    memcpy(message.client_id, client->id, ID_MAX_SZ);
+    message.is_registration = VN_STATE_REGISTRATION == client->state;
+    memcpy(message.card_id, client->card_id.bytes, client->card_id.sz);
 
-    message.signature.size = SIGNATURE_SZ;
-    memcpy(message.signature.bytes, client->static_signature, SIGNATURE_SZ);
+    message.signature.size = client->static_signature.sz;
+    memcpy(message.signature.bytes, client->static_signature.bytes, client->static_signature.sz);
 
     if (!pb_encode(&stream, meta_info_request_fields, &message)) {
         LOG("Cannot encode meta request %s\n.", PB_GET_ERROR(&stream));
@@ -220,8 +223,13 @@ on_verify_server(void *user_data,
     }
 
     printf("Verify server\n");
-    printf("    ID: %s.\n", message.client_id);
+    printf("    Card ID: %s.\n", message.card_id);
     print_buf("    Public key:", public_key, public_key_len);
+    if (message.signature.size) {
+        print_buf("    Signature:", message.signature.bytes, message.signature.size);
+    } else {
+        printf("    Signature NOT PRESENT\n");
+    }
 
     return 0;
 }
@@ -256,8 +264,18 @@ on_registration_read(uv_stream_t *tcp, ssize_t nread, const uv_buf_t *buf) {
     vn_client_t *client = 0;
     ns_get_ctx(tcp->data, USER_CTX_0, (void**)&client);
 
+    vn_result_t res;
+
+    res = (vn_result_t)message.result;
+
+    if (VN_OK == res) {
+        vn_data_t card_id;
+        vn_data_init_set(&card_id, (uint8_t *)message.card_id, strlen(message.card_id) + 1);
+        res = vn_storage_save_card_id(client->id, &card_id);
+    }
+
     if (client->registration_done_cb) {
-        client->registration_done_cb(client, (vn_result_t)message.result);
+        client->registration_done_cb(client, res);
     }
 
     ns_close((uv_handle_t *) tcp, on_close);
@@ -314,6 +332,7 @@ vn_client_register(vn_client_t *ctx,
                    vn_ticket_t *ticket,
                    vn_client_reg_result_cb_t done_cb) {
     ASSERT(ctx);
+    ASSERT(ctx->password);
     ASSERT(ticket);
 
     if (!ctx || !ticket) {
@@ -323,6 +342,26 @@ vn_client_register(vn_client_t *ctx,
     // Create key pair
     auto crypto = vsdk::crypto::Crypto();
     auto keyPair = crypto.generateKeyPair();
+
+    // Save key pair
+
+    auto publicKey = crypto.exportPublicKey(keyPair.publicKey());
+    auto privateKey = crypto.exportPrivateKey(keyPair.privateKey(), ctx->password);
+
+    vn_data_t private_key_data;
+    vn_data_t public_key_data;
+
+    vn_data_init_set(&private_key_data, privateKey.data(), privateKey.size());
+    vn_data_init_set(&public_key_data, publicKey.data(), publicKey.size());
+
+    vn_result_t res;
+    res = vn_storage_save_keys(ctx->id,
+                               &private_key_data,
+                               &public_key_data);
+    if (VN_OK != res) {
+        LOG("Cannot save own key pair to file.");
+        return res;
+    }
 
     // Create card request
     std::unordered_map<std::string, std::string> payload;

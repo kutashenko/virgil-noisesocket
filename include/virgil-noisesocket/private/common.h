@@ -25,8 +25,9 @@ vn_name_by_id(const uint8_t id[ID_MAX_SZ],
 
 vn_result_t
 vn_sign_static_key(const vn_data_t *private_key,
+                   const char *password,
                    const uint8_t static_public_key[STATIC_KEY_SZ],
-                   uint8_t signature[SIGNATURE_SZ]);
+                   vn_data_t *signature);
 
 #ifdef __cplusplus
 }

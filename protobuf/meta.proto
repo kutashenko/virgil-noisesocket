@@ -4,6 +4,6 @@ import "nanopb.proto";
 
 message meta_info_request {
     bool is_registration = 1;
-    string client_id = 2 [(nanopb).max_size = 64];
-    bytes signature = 3 [(nanopb).max_size = 64];
+    string card_id = 2 [(nanopb).max_size = 70];
+    bytes signature = 3 [(nanopb).max_size = 128];
 }

@@ -5,8 +5,14 @@
 #include <virgil-noisesocket/results.h>
 #include <virgil-noisesocket/private/debug.h>
 #include <virgil-noisesocket/private/common.h>
-#include <stdint.h>
 #include <sodium.h>
+
+#include <virgil/sdk/crypto/Crypto.h>
+#include <virgil-noisesocket/data.h>
+
+using virgil::sdk::crypto::CryptoInterface;
+
+namespace vsdk = virgil::sdk;
 
 vn_result_t
 vn_gen_static_keys(uint8_t private_key[STATIC_KEY_SZ],
@@ -44,7 +50,34 @@ vn_name_by_id(const uint8_t id[ID_MAX_SZ],
 
 vn_result_t
 vn_sign_static_key(const vn_data_t *private_key,
+                   const char *password,
                    const uint8_t static_public_key[STATIC_KEY_SZ],
-                   uint8_t signature[SIGNATURE_SZ]) {
+                   vn_data_t *signature) {
+
+    ASSERT(private_key && private_key->bytes);
+    ASSERT(password);
+    ASSERT(static_public_key);
+    ASSERT(signature);
+
+    if (!private_key || !private_key->bytes
+            || !password || !static_public_key || !signature) {
+        return VN_WRONG_PARAM;
+    }
+
+    try {
+        auto crypto = vsdk::crypto::Crypto();
+
+        auto privateKey = VIRGIL_BYTE_ARRAY_FROM_PTR_AND_LEN(private_key->bytes, private_key->sz);
+        auto key = crypto.importPrivateKey(privateKey, password);
+        auto data = VIRGIL_BYTE_ARRAY_FROM_PTR_AND_LEN(static_public_key, STATIC_KEY_SZ);
+
+        auto sign = crypto.generateSignature(data, key);
+
+        vn_data_init_copy(signature, sign.data(), sign.size());
+
+        return VN_OK;
+
+    } catch(...) {}
+
     return VN_CANNOT_SIGN_OWN_KEY;
 }

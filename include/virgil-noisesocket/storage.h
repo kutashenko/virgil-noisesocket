@@ -29,6 +29,14 @@ vn_storage_save_keys(const uint8_t id[ID_MAX_SZ],
                      const vn_data_t *private_key,
                      const vn_data_t *public_key);
 
+vn_result_t
+vn_storage_load_card_id(const uint8_t id[ID_MAX_SZ],
+                        vn_data_t *card_id);
+
+vn_result_t
+vn_storage_save_card_id(const uint8_t id[ID_MAX_SZ],
+                        const vn_data_t *card_id);
+
 #ifdef __cplusplus
 }
 #endif

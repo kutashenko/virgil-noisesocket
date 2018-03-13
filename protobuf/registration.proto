@@ -8,4 +8,5 @@ message registration_request {
 
 message registration_response {
     uint32 result = 1;
+    string card_id = 2 [(nanopb).max_size = 70];
 }

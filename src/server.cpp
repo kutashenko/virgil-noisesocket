@@ -36,6 +36,7 @@ using virgil::crypto::VirgilByteArray;
 #include <meta.pb.h>
 #include <registration.pb.h>
 #include <virgil-noisesocket/storage.h>
+#include <virgil-noisesocket/data.h>
 
 #define SERVER_CTX(X) ((vn_server_t*)(X->data))
 
@@ -45,7 +46,9 @@ struct vn_server_s {
     uint8_t static_public_key[STATIC_KEY_SZ];
     uint8_t static_private_key[STATIC_KEY_SZ];
 
-    uint8_t static_signature[SIGNATURE_SZ];
+    char *password;
+
+    vn_data_t static_signature;
 
     uint8_t root_public_key[STATIC_KEY_SZ];
 
@@ -55,8 +58,6 @@ struct vn_server_s {
     uint16_t port;
     uv_tcp_t uv_server;
     uv_loop_t *uv_loop;
-
-    char *identity;
 };
 
 extern "C" vn_server_t *
@@ -87,25 +88,27 @@ vn_server_new(const char *addr,
 
     memset(&private_key, 0, sizeof(private_key));
     memset(&public_key, 0, sizeof(public_key));
+    strcpy((char*)server->id, identity);
 
     bool is_signed = false;
     if (VN_OK == vn_storage_load_keys(server->id, &private_key, &public_key)) {
         if (VN_OK == vn_sign_static_key(&private_key,
+                                        server->password,
                                         server->static_public_key,
-                                        server->static_signature)) {
+                                        &server->static_signature)) {
             LOG("Static key has been signed successfuly.");
             is_signed = true;
         }
     }
 
     if (!is_signed) {
+        server->static_signature.sz = 0;
         LOG("Cannot sign static key. Looks like client should be regestered at first.");
     }
 
 
     server->port = port;
     server->addr = strdup(addr);
-    server->identity = strdup(identity);
     server->uv_loop = uv_loop;
     server->virgil_cretentials = cretentials;
 
@@ -123,7 +126,6 @@ vn_server_free(vn_server_t *server) {
     if (server->addr) {
         free(server->addr);
     }
-    free(server->identity);
     free(server);
 
     return VN_OK;
@@ -142,9 +144,11 @@ _fill_crypto_ctx(vn_server_t *server, ns_crypto_t *crypto_ctx) {
     pb_ostream_t stream = pb_ostream_from_buffer(crypto_ctx->meta_data, META_DATA_LEN);
 
     message.is_registration = false;
-    memcpy(message.client_id, server->id, ID_MAX_SZ);
-    message.signature.size = SIGNATURE_SZ;
-    memcpy(message.signature.bytes, server->static_signature, SIGNATURE_SZ);
+    memcpy(message.card_id, server->id, ID_MAX_SZ);
+    message.signature.size = server->static_signature.sz;
+    if (message.signature.size) {
+        memcpy(message.signature.bytes, server->static_signature.bytes, server->static_signature.sz);
+    }
 
     if (!pb_encode(&stream, meta_info_request_fields, &message)) {
         LOG("Cannot encode meta request %s\n.", PB_GET_ERROR(&stream));
@@ -175,7 +179,51 @@ alloc_buffer(uv_handle_t * handle, size_t size, uv_buf_t *buf) {
 static vn_result_t
 _verify_client(vn_server_t *server,
                vn_serverside_client_t *client,
-               meta_info_request *request) {
+               meta_info_request *request,
+               vn_data_t *public_key) {
+    ASSERT(server);
+    ASSERT(server->virgil_cretentials.private_key_password);
+    ASSERT(server->virgil_cretentials.private_key);
+    ASSERT(server->virgil_cretentials.app_id);
+    ASSERT(server->virgil_cretentials.token);
+    ASSERT(request);
+    ASSERT(public_key);
+
+    const std::string _token = server->virgil_cretentials.token;
+    const std::string _appid = server->virgil_cretentials.app_id;
+
+    auto crypto = std::make_shared<Crypto>();
+
+    auto serviceConfig = ServiceConfig::createConfig(_token);
+
+    // TODO: Move to settings
+    serviceConfig
+            .cardsServiceURL("https://cards.virgilsecurity.com/v4")
+            .cardsServiceROURL("https://cards-ro.virgilsecurity.com/v4");
+
+    auto validator = std::make_unique<CardValidator>(crypto);
+    serviceConfig.cardValidator(std::move(validator));
+
+    Client virgilClient(std::move(serviceConfig));
+
+
+    auto future = virgilClient.getCard(request->card_id);
+    try {
+        auto card = future.get();
+        std::cout << "Received card: " << card.identity() << " " << card.createdAt() << " " << card.cardVersion() << std::endl;
+
+        auto publicKey = crypto->importPublicKey(card.publicKeyData());
+        auto signature = VIRGIL_BYTE_ARRAY_FROM_PTR_AND_LEN(request->signature.bytes, request->signature.size);
+        auto data = VIRGIL_BYTE_ARRAY_FROM_PTR_AND_LEN(public_key->bytes, public_key->sz);
+
+        bool is_verified;
+        is_verified = crypto->verify(data, signature, publicKey);
+
+        LOG("Client verification: %s\n", is_verified ? "OK" : "FAIL");
+
+        return is_verified ? VN_OK : VN_VERIFICATION_ERROR;
+    } catch (...) {}
+
     return VN_VERIFICATION_ERROR;
 }
 
@@ -206,13 +254,28 @@ on_verify_client(void *user_data,
 
     printf("Verify client\n");
     printf("    Registration: %s.\n", message.is_registration ? "TRUE" : "FALSE");
-    printf("    ID: %s.\n", message.client_id);
+    printf("    Card ID: %s.\n", message.card_id);
     print_buf("    Public key:", public_key, public_key_len);
+    if (message.signature.size) {
+        print_buf("    Signature:", message.signature.bytes, message.signature.size);
+    } else {
+        printf("    Signature NOT PRESENT\n");
+    }
+
 
     if (!message.is_registration) {
         // TODO: Fix bottle neck here. Verification needs callback !
 
-        return _verify_client(server, client, &message);
+        vn_data_t public_key_data;
+
+        vn_data_init_set(&public_key_data, public_key, public_key_len);
+
+        vn_result_t res;
+        res = _verify_client(server, client, &message, &public_key_data);
+        if (VN_OK != res) {
+            LOG("Cannot verify client: %s\n", message.card_id);
+        }
+        return res;
     }
 
     return 0;
@@ -230,7 +293,11 @@ on_write(uv_write_t *req, int status) {
 static vn_result_t
 _send_register_response(vn_server_t *server,
                         vn_serverside_client_t *client,
-                        vn_result_t result) {
+                        vn_result_t result,
+                        const char *card_id) {
+
+    ASSERT(server);
+    ASSERT(client);
 
     // Create protobuf data
     uv_buf_t *buf = (uv_buf_t*)calloc(1, sizeof(uv_buf_t));
@@ -243,6 +310,12 @@ _send_register_response(vn_server_t *server,
     pb_ostream_t stream = pb_ostream_from_buffer((pb_byte_t*)buf->base, sz);
 
     message.result = result;
+
+    if (card_id) {
+        if (strnlen(card_id, sizeof(message.card_id)) < sizeof(message.card_id)) {
+            strcpy(message.card_id, card_id);
+        }
+    }
 
     if (!pb_encode(&stream, registration_response_fields, &message)) {
         LOG("Cannot encode registration request %s\n.", PB_GET_ERROR(&stream));
@@ -310,9 +383,9 @@ _register_client(vn_server_t *server,
     try {
         auto card = future.get();
         std::cout << "Output: " << card.identity() << " " << card.createdAt() << " " << card.cardVersion() << std::endl;
-        _send_register_response(server, client, VN_OK);
+        _send_register_response(server, client, VN_OK, card.identifier().c_str());
     } catch (...) {
-        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
+        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT, 0);
     }
 
     return VN_OK;
@@ -342,7 +415,7 @@ on_read(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf) {
 
         if (!pb_decode(&stream, registration_request_fields, &message)) {
             LOG("Decoding failed: %s\n", PB_GET_ERROR(&stream));
-            _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
+            _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT, 0);
             return;
         }
 
@@ -354,7 +427,7 @@ on_read(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf) {
         LOG("Wait registration...\n");
     } else {
         LOG("Wrong registration state.\n");
-        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT);
+        _send_register_response(server, client, VN_CANNOT_REGISTER_CLIENT, 0);
     }
 }
 

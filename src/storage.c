@@ -11,7 +11,7 @@
 
 static const char *PRIVATE_KEY_FILE_SUFFIX = "-private-key.dat";
 static const char *PUBLIC_KEY_FILE_SUFFIX = "-public-key.dat";
-static const char *CARD_ID_FILE = "card-id.dat";
+static const char *CARD_ID_FILE_SUFFIX = "-card-id.dat";
 
 vn_result_t
 vn_storage_load(const char *name, vn_data_t *data) {
@@ -34,7 +34,7 @@ vn_storage_load(const char *name, vn_data_t *data) {
 
         if (flesize > 0 && flesize < 2048) {
             vn_data_init_alloc(data, flesize);
-            data->sz = fread(data->bytes, flesize, 1, f);
+            data->sz = fread(data->bytes, 1, flesize, f);
             res = true;
         }
 
@@ -55,7 +55,7 @@ vn_storage_save(const char *name, const vn_data_t *data) {
     }
 
     bool res = false;
-    FILE *f = fopen(name, "wb");
+    FILE *f = fopen(name, "w+");
     if (f > 0) {
         res = data->sz == fwrite(data->bytes, 1, data->sz, f);
         fclose(f);
@@ -132,10 +132,40 @@ vn_storage_save_keys(const uint8_t id[ID_MAX_SZ],
         return VN_SAVE_ERROR;
     }
 
-    bool res = false;
-
     if (VN_OK == vn_storage_save(private_key_path, private_key)
         && VN_OK == vn_storage_save(public_key_path, public_key)) {
+        return VN_OK;
+    }
+
+    return VN_SAVE_ERROR;
+}
+
+vn_result_t
+vn_storage_load_card_id(const uint8_t id[ID_MAX_SZ],
+                        vn_data_t *card_id) {
+    char id_path[PATH_MAX];
+    if (VN_OK != vn_name_by_id(id, id_path)) {
+        return VN_GENERAL_ERROR;
+    }
+    strcat(id_path, CARD_ID_FILE_SUFFIX);
+
+    if (VN_OK == vn_storage_load(id_path, card_id)) {
+        return VN_OK;
+    }
+
+    return VN_LOAD_ERROR;
+}
+
+vn_result_t
+vn_storage_save_card_id(const uint8_t id[ID_MAX_SZ],
+                        const vn_data_t *card_id) {
+    char id_path[PATH_MAX];
+    if (VN_OK != vn_name_by_id(id, id_path)) {
+        return VN_GENERAL_ERROR;
+    }
+    strcat(id_path, CARD_ID_FILE_SUFFIX);
+
+    if (VN_OK == vn_storage_save(id_path, card_id)) {
         return VN_OK;
     }
 
