@@ -149,6 +149,13 @@ alloc_buffer(uv_handle_t * handle, size_t size, uv_buf_t *buf) {
     buf->len = size;
 }
 
+static vn_result_t
+_verify_client(vn_server_t *server,
+               vn_serverside_client_t *client,
+               meta_info_request *request) {
+    return VN_VERIFICATION_ERROR;
+}
+
 static int
 on_verify_client(void *user_data,
                  const uint8_t *public_key, size_t public_key_len,
@@ -166,8 +173,10 @@ on_verify_client(void *user_data,
     pb_istream_t stream = pb_istream_from_buffer((pb_byte_t *)meta_data, meta_data_len);
 
     if (!pb_decode(&stream, meta_info_request_fields, &message)) {
+#if 0
         LOG("Decoding failed: %s\n", PB_GET_ERROR(&stream));
         return VN_CANNOT_REGISTER_CLIENT;
+#endif
     }
 
     client->register_only = message.is_registration;
@@ -176,6 +185,13 @@ on_verify_client(void *user_data,
     printf("    Registration: %s.\n", message.is_registration ? "TRUE" : "FALSE");
     printf("    ID: %s.\n", message.client_id);
     print_buf("    Public key:", public_key, public_key_len);
+
+    if (!message.is_registration) {
+        // TODO: Fix bottle neck here. Verification needs callback !
+
+        return _verify_client(server, client, &message);
+    }
+
     return 0;
 }
 
