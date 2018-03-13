@@ -60,6 +60,7 @@ file(GLOB VIRGIL_NOISESOCKET_SRC
         "src/server.cpp"
         "src/common.c"
         "src/data.c"
+        "src/storage.c"
         )
 
 file(GLOB VIRGIL_NOISESOCKET_INCLUDE

@@ -35,7 +35,7 @@ using virgil::crypto::VirgilByteArray;
 #include <pb_decode.h>
 #include <meta.pb.h>
 #include <registration.pb.h>
-#include <virgil-noisesocket/data.h>
+#include <virgil-noisesocket/storage.h>
 
 #define SERVER_CTX(X) ((vn_server_t*)(X->data))
 
@@ -81,6 +81,24 @@ vn_server_new(const char *addr,
         vn_server_free(server);
         return NULL;
     }
+
+    uint8_t private_key[PRIVATE_KEY_SZ];
+    uint8_t public_key[PUBLIC_KEY_SZ];
+
+    bool is_signed = false;
+    if (VN_OK == vn_storage_load_keys(server->id, private_key, public_key)) {
+        if (VN_OK == vn_sign_static_key(private_key,
+                                        server->static_public_key,
+                                        server->static_signature)) {
+            LOG("Static key has been signed successfuly.");
+            is_signed = true;
+        }
+    }
+
+    if (!is_signed) {
+        LOG("Cannot sign static key. Looks like client should be regestered at first.");
+    }
+
 
     server->port = port;
     server->addr = strdup(addr);

@@ -6,6 +6,7 @@
 #include <virgil-noisesocket/general.h>
 #include "virgil-noisesocket/private/debug.h"
 #include "virgil-noisesocket/private/common.h"
+#include "virgil-noisesocket/storage.h"
 
 #include <iostream>
 
@@ -84,6 +85,23 @@ vn_client_new(const char *identity,
                                     client->static_public_key)) {
         vn_client_free(client);
         return NULL;
+    }
+
+    uint8_t private_key[PRIVATE_KEY_SZ];
+    uint8_t public_key[PUBLIC_KEY_SZ];
+
+    bool is_signed = false;
+    if (VN_OK == vn_storage_load_keys(client->id, private_key, public_key)) {
+        if (VN_OK == vn_sign_static_key(private_key,
+                                        client->static_public_key,
+                                        client->static_signature)) {
+            LOG("Static key has been signed successfuly.");
+            is_signed = true;
+        }
+    }
+
+    if (!is_signed) {
+        LOG("Cannot sign static key. Looks like client should be regestered at first.");
     }
 
     return client;

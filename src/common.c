@@ -25,3 +25,26 @@ vn_gen_static_keys(uint8_t private_key[STATIC_KEY_SZ],
 
     return VN_OK;
 }
+
+vn_result_t
+vn_name_by_id(uint8_t id[ID_MAX_SZ],
+              char name[NAME_MAX_SZ]) {
+    ASSERT(id);
+    ASSERT(name);
+
+    int i;
+    char *p = name;
+
+    for (i = 0; i < ID_MAX_SZ; ++i, p += 2) {
+        sprintf(p, "%02X", id[i]);
+    }
+
+    return VN_OK;
+}
+
+vn_result_t
+vn_sign_static_key(const uint8_t private_key[PRIVATE_KEY_SZ],
+                   const uint8_t static_public_key[STATIC_KEY_SZ],
+                   uint8_t signature[SIGNATURE_SZ]) {
+    return VN_CANNOT_SIGN_OWN_KEY;
+}
