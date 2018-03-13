@@ -19,7 +19,7 @@ vn_gen_static_keys(uint8_t private_key[STATIC_KEY_SZ],
                    uint8_t public_key[STATIC_KEY_SZ]);
 
 vn_result_t
-vn_name_by_id(uint8_t private_key[ID_MAX_SZ],
+vn_name_by_id(const uint8_t id[ID_MAX_SZ],
               char name[NAME_MAX_SZ]);
 
 vn_result_t

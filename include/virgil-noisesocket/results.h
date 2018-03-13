@@ -14,6 +14,8 @@ typedef enum {
     VN_VERIFICATION_ERROR,
     VN_CANNOT_REGISTER_CLIENT,
     VN_CANNOT_SIGN_OWN_KEY,
+    VN_SAVE_ERROR,
+    VN_LOAD_ERROR,
     VN_GENERAL_ERROR
 } vn_result_t;
 
