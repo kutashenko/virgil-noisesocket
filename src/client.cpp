@@ -113,7 +113,20 @@ _fill_crypto_ctx(vn_client_t *client, ns_crypto_t *crypto_ctx) {
     crypto_ctx->public_key_sz = STATIC_KEY_SZ;
     crypto_ctx->private_key = client->static_private_key;
     crypto_ctx->private_key_sz = STATIC_KEY_SZ;
-    strcpy((char*)crypto_ctx->meta_data, "Client meta data");
+
+    meta_info_request message = meta_info_request_init_zero;
+
+    // Create a stream that will write to our buffer.
+    pb_ostream_t stream = pb_ostream_from_buffer(crypto_ctx->meta_data, META_DATA_LEN);
+
+    message.is_registration =  VN_STATE_REGISTRATION == client->state;
+    memcpy(message.client_id, client->id, ID_MAX_SZ);
+
+    if (!pb_encode(&stream, meta_info_request_fields, &message)) {
+        LOG("Cannot encode meta request %s\n.", PB_GET_ERROR(&stream));
+        return VN_CANNOT_REGISTER_CLIENT;
+    }
+
     return VN_OK;
 }
 
@@ -173,9 +186,19 @@ on_verify_server(void *user_data,
     vn_client_t *client = 0;
     ns_get_ctx(socket->data, USER_CTX_0, (void**)&client);
 
+    meta_info_request message = meta_info_request_init_zero;
+
+    pb_istream_t stream = pb_istream_from_buffer((pb_byte_t *)meta_data, meta_data_len);
+
+    if (!pb_decode(&stream, meta_info_request_fields, &message)) {
+        LOG("Decoding failed: %s\n", PB_GET_ERROR(&stream));
+        return VN_CANNOT_REGISTER_CLIENT;
+    }
+
     printf("Verify server\n");
-    printf("    Meta data: %s.\n", (const char*)meta_data);
+    printf("    ID: %s.\n", message.client_id);
     print_buf("    Public key:", public_key, public_key_len);
+
     return 0;
 }
 

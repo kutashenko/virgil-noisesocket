@@ -70,5 +70,4 @@ test_registration() {
     vn_server_free(server);
 
     TEST_CHECK_(VN_OK == register_result, "Registration error!\n");
-
 }

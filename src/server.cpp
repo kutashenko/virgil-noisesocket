@@ -114,7 +114,20 @@ _fill_crypto_ctx(vn_server_t *server, ns_crypto_t *crypto_ctx) {
     crypto_ctx->public_key_sz = STATIC_KEY_SZ;
     crypto_ctx->private_key = server->static_private_key;
     crypto_ctx->private_key_sz = STATIC_KEY_SZ;
-    strcpy((char*)crypto_ctx->meta_data, "Server meta data");
+
+    meta_info_request message = meta_info_request_init_zero;
+
+    // Create a stream that will write to our buffer.
+    pb_ostream_t stream = pb_ostream_from_buffer(crypto_ctx->meta_data, META_DATA_LEN);
+
+    message.is_registration = false;
+    memcpy(message.client_id, server->id, ID_MAX_SZ);
+
+    if (!pb_encode(&stream, meta_info_request_fields, &message)) {
+        LOG("Cannot encode meta request %s\n.", PB_GET_ERROR(&stream));
+        return VN_CANNOT_REGISTER_CLIENT;
+    }
+
     return VN_OK;
 }
 
@@ -148,10 +161,20 @@ on_verify_client(void *user_data,
     ns_get_ctx(socket->data, USER_CTX_0, (void**)&server);
     ns_get_ctx(socket->data, USER_CTX_1, (void**)&client);
 
-    client->register_only = true;
+    meta_info_request message = meta_info_request_init_zero;
+
+    pb_istream_t stream = pb_istream_from_buffer((pb_byte_t *)meta_data, meta_data_len);
+
+    if (!pb_decode(&stream, meta_info_request_fields, &message)) {
+        LOG("Decoding failed: %s\n", PB_GET_ERROR(&stream));
+        return VN_CANNOT_REGISTER_CLIENT;
+    }
+
+    client->register_only = message.is_registration;
 
     printf("Verify client\n");
-    printf("    Meta data: %s.\n", (const char*)meta_data);
+    printf("    Registration: %s.\n", message.is_registration ? "TRUE" : "FALSE");
+    printf("    ID: %s.\n", message.client_id);
     print_buf("    Public key:", public_key, public_key_len);
     return 0;
 }
@@ -182,7 +205,7 @@ _send_register_response(vn_server_t *server,
 
     message.result = result;
 
-    if (!pb_encode(&stream, registration_request_fields, &message)) {
+    if (!pb_encode(&stream, registration_response_fields, &message)) {
         LOG("Cannot encode registration request %s\n.", PB_GET_ERROR(&stream));
         return VN_CANNOT_REGISTER_CLIENT;
     }
