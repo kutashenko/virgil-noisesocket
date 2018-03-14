@@ -248,6 +248,7 @@ on_registration_read(uv_stream_t *tcp, ssize_t nread, const uv_buf_t *buf) {
     } else {
         //we got an EOF
         ns_close((uv_handle_t *) tcp, on_close);
+        return;
     }
 
     // Get protobuf data
@@ -321,6 +322,20 @@ vn_client_connect(vn_client_t *ctx,
     }
 
     ns_set_ctx(ctx->socket.data, USER_CTX_0, ctx);
+
+    return VN_OK;
+}
+
+extern "C" vn_result_t
+vn_client_disconnect(vn_client_t *ctx,
+                     uv_close_cb close_cb) {
+    ASSERT(ctx);
+
+    if (!ctx) {
+        return VN_WRONG_PARAM;
+    }
+
+    ns_close((uv_handle_t *) &ctx->socket, close_cb);
 
     return VN_OK;
 }

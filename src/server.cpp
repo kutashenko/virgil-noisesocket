@@ -265,6 +265,10 @@ on_verify_client(void *user_data,
     if (!message.is_registration) {
         // TODO: Fix bottle neck here. Verification needs callback !
 
+        if (!message.signature.size) {
+            return VN_VERIFICATION_ERROR;
+        }
+
         vn_data_t public_key_data;
 
         vn_data_init_set(&public_key_data, public_key, public_key_len);
@@ -493,6 +497,8 @@ vn_server_start(vn_server_t *server) {
 extern "C" vn_result_t
 vn_server_stop(vn_server_t *server) {
     ASSERT(server);
-    uv_close((uv_handle_t*)&server->uv_server, NULL);
+    if (0 == uv_is_closing((uv_handle_t*)&server->uv_server)) {
+        uv_close((uv_handle_t*)&server->uv_server, NULL);
+    }
     return VN_GENERAL_ERROR;
 }

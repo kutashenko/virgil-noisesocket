@@ -15,18 +15,23 @@ static uv_loop_t *uv_loop = NULL;
 static vn_client_t *client = NULL;
 static vn_server_t *server = NULL;
 
-static vn_result_t register_result;
+static vn_result_t connection_result = VN_CONNECT_ERROR;
 
 static void
 on_session_ready(uv_tcp_t *handle, ns_result_t result) {
     printf("Session ready \n");
+
+    connection_result = NS_OK == result ? VN_OK : VN_CONNECT_ERROR;
+
+    vn_client_disconnect(client, 0);
+    vn_server_stop(server);
 }
 
 static void
 on_read(uv_stream_t *stream,
         ssize_t nread,
         const uv_buf_t* buf) {
-    printf("Session ready \n");
+    printf("Ready to read\n");
 }
 
 void
@@ -69,5 +74,5 @@ test_verified_connection() {
     vn_client_free(client);
     vn_server_free(server);
 
-    TEST_CHECK_(VN_OK == register_result, "Registration error!\n");
+    TEST_CHECK_(VN_OK == connection_result, "Connection error!\n");
 }

@@ -42,6 +42,10 @@ vn_client_connect(vn_client_t *ctx,
                   ns_session_ready_cb_t session_ready_cb,
                   uv_read_cb read_cb);
 
+vn_result_t
+vn_client_disconnect(vn_client_t *ctx,
+                     uv_close_cb close_cb);
+
 #ifdef __cplusplus
 }
 #endif
