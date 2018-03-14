@@ -21,8 +21,7 @@ main() {
 
     vn_ticket_t ticket;
 
-    vn_client_t *client = NULL;
-    vn_server_t *server = NULL;
+    vn_client_t *client;
 
     // Create UV loops
     uv_loop = uv_default_loop();

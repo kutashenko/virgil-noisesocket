@@ -20,12 +20,6 @@ main() {
     const char *addr = "0.0.0.0";
     uint16_t port = 31000;
 
-    const char *test_identity = "5edfb645-b32d-486d-af22-719a717f2062";
-    const char *test_password = "qweASD123";
-
-    vn_ticket_t ticket;
-
-    vn_client_t *client = NULL;
     vn_server_t *server = NULL;
 
     // Create UV loops

@@ -73,7 +73,7 @@ vn_server_new(const char *addr,
         return NULL;
     }
 
-    vn_server_t *server = NULL;
+    vn_server_t *server;
 
     server = (vn_server_t *) calloc(1, sizeof(vn_server_t));
 
@@ -190,7 +190,6 @@ _verify_client(vn_server_t *server,
     ASSERT(public_key);
 
     const std::string _token = server->virgil_cretentials.token;
-    const std::string _appid = server->virgil_cretentials.app_id;
 
     auto crypto = std::make_shared<Crypto>();
 
