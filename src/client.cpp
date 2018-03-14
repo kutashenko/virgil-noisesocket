@@ -106,6 +106,9 @@ vn_client_new(const char *identity,
         }
     }
 
+    vn_data_free(&private_key);
+    vn_data_free(&public_key);
+
     if (!is_signed) {
         LOG("Cannot sign static key. Looks like client should be regestered at first.");
     }
@@ -125,6 +128,8 @@ vn_client_free(vn_client_t *ctx) {
 
     vn_data_free(&ctx->card_id);
     vn_data_free(&ctx->private_key);
+    vn_data_free(&ctx->static_signature);
+    vn_data_free(&ctx->registration_request);
 
     free(ctx);
 
@@ -164,6 +169,9 @@ on_write(uv_write_t *req, int status) {
         return;
     }
     printf("Client wrote data to server.\n");
+
+    free(req->bufsml[0].base);
+    free(req);
 }
 
 static void
