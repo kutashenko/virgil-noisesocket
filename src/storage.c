@@ -32,7 +32,11 @@ vn_storage_load(const char *name, vn_data_t *data) {
 
         fseek(f, 0, SEEK_SET);
 
+#if defined(linux)
         int f_sz = filesize.__pos;
+#else
+        int f_sz = filesize;
+#endif
 
         if (f_sz > 0 && f_sz < 2048) {
             vn_data_init_alloc(data, f_sz);
