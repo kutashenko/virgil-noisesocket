@@ -27,14 +27,16 @@ vn_storage_load(const char *name, vn_data_t *data) {
     if (f > 0) {
         fseek(f, 0, SEEK_END);
 
-        fpos_t flesize;
-        fgetpos(f, &flesize);
+        fpos_t filesize;
+        fgetpos(f, &filesize);
 
         fseek(f, 0, SEEK_SET);
 
-        if (flesize > 0 && flesize < 2048) {
-            vn_data_init_alloc(data, flesize);
-            data->sz = fread(data->bytes, 1, flesize, f);
+        int f_sz = filesize.__pos;
+
+        if (f_sz > 0 && f_sz < 2048) {
+            vn_data_init_alloc(data, f_sz);
+            data->sz = fread(data->bytes, 1, f_sz, f);
             res = true;
         }
 
