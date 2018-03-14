@@ -101,6 +101,9 @@ vn_server_new(const char *addr,
         }
     }
 
+    vn_data_free(&private_key);
+    vn_data_free(&public_key);
+
     if (!is_signed) {
         server->static_signature.sz = 0;
         LOG("Cannot sign static key. Looks like client should be regestered at first.");
@@ -159,11 +162,23 @@ _fill_crypto_ctx(vn_server_t *server, ns_crypto_t *crypto_ctx) {
 }
 
 static void
+on_close(uv_handle_t *handle) {
+    ASSERT(handle);
+
+    vn_serverside_client_t *client = 0;
+    ns_get_ctx(handle->data, USER_CTX_1, (void**)&client);
+
+    if (client) {
+        free(client);
+    }
+}
+
+static void
 on_session_ready(uv_tcp_t *client, ns_result_t result) {
 
     if (NS_OK != result) {
         printf("Session error %d.\n", (int)result);
-        ns_close((uv_handle_t*)client, NULL);
+        ns_close((uv_handle_t*)client, on_close);
         return;
     }
 
@@ -291,6 +306,9 @@ on_write(uv_write_t *req, int status) {
         return;
     }
     printf("Client wrote data to client.\n");
+
+    free(req->bufsml[0].base);
+    free(req);
 }
 
 static vn_result_t
@@ -398,7 +416,7 @@ static void
 on_read(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf) {
     if (nread  <= 0) {
         fprintf(stderr, "Read error!\n");
-        ns_close((uv_handle_t *)socket, NULL);
+        ns_close((uv_handle_t *)socket, on_close);
         return;
     }
 
@@ -460,6 +478,8 @@ on_new_connection(uv_stream_t *server, int status) {
                               alloc_buffer,
                               on_read,
                               on_verify_client);
+
+        ns_set_deletable((uv_handle_t*)socket, true);
 
         vn_server_t *vn_server = (vn_server_t*)server->data;
         ns_set_ctx(socket->data, USER_CTX_0, vn_server);
