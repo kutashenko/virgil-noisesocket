@@ -321,14 +321,14 @@ _send_register_response(vn_server_t *server,
     ASSERT(client);
 
     // Create protobuf data
-    uv_buf_t *buf = (uv_buf_t*)calloc(1, sizeof(uv_buf_t));
+    uv_buf_t buf;
     size_t sz = registration_response_size;
-    buf->base = (char*)malloc(ns_write_buf_sz(sz));
+    buf.base = (char*)malloc(ns_write_buf_sz(sz));
 
     registration_response message = registration_response_init_zero;
 
     // Create a stream that will write to our buffer.
-    pb_ostream_t stream = pb_ostream_from_buffer((pb_byte_t*)buf->base, sz);
+    pb_ostream_t stream = pb_ostream_from_buffer((pb_byte_t*)buf.base, sz);
 
     message.result = result;
 
@@ -344,12 +344,12 @@ _send_register_response(vn_server_t *server,
     }
 
     ns_prepare_write((uv_stream_t*)client->socket,
-                     (uint8_t*)buf->base, stream.bytes_written,
+                     (uint8_t*)buf.base, stream.bytes_written,
                      ns_write_buf_sz(sz),
-                     &buf->len);
+                     &buf.len);
 
     uv_write_t *request = (uv_write_t*)calloc(1, sizeof(uv_write_t));
-    uv_write(request, (uv_stream_t*)client->socket, buf, 1, on_write);
+    uv_write(request, (uv_stream_t*)client->socket, &buf, 1, on_write);
     LOG("Send register response: %s\n", VN_OK == result ? "OK" : "ERROR");
 
     return VN_OK;
